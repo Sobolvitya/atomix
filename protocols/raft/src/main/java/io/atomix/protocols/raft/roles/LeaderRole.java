@@ -587,6 +587,7 @@ public final class LeaderRole extends ActiveRole {
 
   @Override
   public CompletableFuture<CommandResponse> onCommand(final CommandRequest request) {
+    log.debug("Leader received write request");
     raft.checkThread();
     logRequest(request);
 
@@ -745,6 +746,8 @@ public final class LeaderRole extends ActiveRole {
 
   @Override
   public CompletableFuture<QueryResponse> onQuery(final QueryRequest request) {
+    log.debug("Leader Received Read  {}", request);
+
     raft.checkThread();
     logRequest(request);
 

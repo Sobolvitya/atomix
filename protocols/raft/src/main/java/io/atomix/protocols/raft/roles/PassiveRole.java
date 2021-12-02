@@ -19,37 +19,9 @@ import io.atomix.primitive.PrimitiveException;
 import io.atomix.protocols.raft.RaftError;
 import io.atomix.protocols.raft.RaftException;
 import io.atomix.protocols.raft.RaftServer;
-import io.atomix.protocols.raft.ReadConsistency;
 import io.atomix.protocols.raft.impl.OperationResult;
 import io.atomix.protocols.raft.impl.RaftContext;
-import io.atomix.protocols.raft.protocol.AppendRequest;
-import io.atomix.protocols.raft.protocol.AppendResponse;
-import io.atomix.protocols.raft.protocol.CloseSessionRequest;
-import io.atomix.protocols.raft.protocol.CloseSessionResponse;
-import io.atomix.protocols.raft.protocol.CommandRequest;
-import io.atomix.protocols.raft.protocol.CommandResponse;
-import io.atomix.protocols.raft.protocol.InstallRequest;
-import io.atomix.protocols.raft.protocol.InstallResponse;
-import io.atomix.protocols.raft.protocol.JoinRequest;
-import io.atomix.protocols.raft.protocol.JoinResponse;
-import io.atomix.protocols.raft.protocol.KeepAliveRequest;
-import io.atomix.protocols.raft.protocol.KeepAliveResponse;
-import io.atomix.protocols.raft.protocol.LeaveRequest;
-import io.atomix.protocols.raft.protocol.LeaveResponse;
-import io.atomix.protocols.raft.protocol.MetadataRequest;
-import io.atomix.protocols.raft.protocol.MetadataResponse;
-import io.atomix.protocols.raft.protocol.OpenSessionRequest;
-import io.atomix.protocols.raft.protocol.OpenSessionResponse;
-import io.atomix.protocols.raft.protocol.OperationResponse;
-import io.atomix.protocols.raft.protocol.PollRequest;
-import io.atomix.protocols.raft.protocol.PollResponse;
-import io.atomix.protocols.raft.protocol.QueryRequest;
-import io.atomix.protocols.raft.protocol.QueryResponse;
-import io.atomix.protocols.raft.protocol.RaftResponse;
-import io.atomix.protocols.raft.protocol.ReconfigureRequest;
-import io.atomix.protocols.raft.protocol.ReconfigureResponse;
-import io.atomix.protocols.raft.protocol.VoteRequest;
-import io.atomix.protocols.raft.protocol.VoteResponse;
+import io.atomix.protocols.raft.protocol.*;
 import io.atomix.protocols.raft.session.RaftSession;
 import io.atomix.protocols.raft.storage.log.RaftLogReader;
 import io.atomix.protocols.raft.storage.log.RaftLogWriter;
@@ -379,40 +351,33 @@ public class PassiveRole extends InactiveRole {
     // query to the leader. This ensures that a follower does not tell the client its session
     // doesn't exist if the follower hasn't had a chance to see the session's registration entry.
     if (raft.getState() != RaftContext.State.READY || raft.getLastApplied() < request.session()) {
-      log.trace("State out of sync, forwarding query to leader");
-      return queryForward(request);
+      // still continue without forwarding to a leader
+      log.error("State out of sync. Entries from client session Id have not yet been applied");
     }
 
     // Look up the client's session.
     RaftSession session = raft.getSessions().getSession(request.session());
     if (session == null) {
-      log.trace("State out of sync, forwarding query to leader");
+      log.error("State out of sync, forwarding query to leader. Session is null.");
       return queryForward(request);
     }
 
-    // If the session's consistency level is SEQUENTIAL, handle the request here, otherwise forward it.
-    if (session.readConsistency() == ReadConsistency.SEQUENTIAL) {
-
-      // If the commit index is not in the log then we've fallen too far behind the leader to perform a local query.
-      // Forward the request to the leader.
-      if (raft.getLogWriter().getLastIndex() < raft.getCommitIndex()) {
-        log.trace("State out of sync, forwarding query to leader");
-        return queryForward(request);
-      }
-
-      final Indexed<QueryEntry> entry = new Indexed<>(
-          request.index(),
-          new QueryEntry(
-              raft.getTerm(),
-              System.currentTimeMillis(),
-              request.session(),
-              request.sequenceNumber(),
-              request.operation()), 0);
-
-      return applyQuery(entry).thenApply(this::logResponse);
-    } else {
-      return queryForward(request);
+    long diff = raft.getLogWriter().getLastIndex() - raft.getCommitIndex();
+    if (diff < 0) {
+      log.info("State out of sync. Difference " + diff);
     }
+
+    // Always serve reads from local storage
+    final Indexed<QueryEntry> entry = new Indexed<>(
+            request.index(),
+            new QueryEntry(
+                    raft.getTerm(),
+                    System.currentTimeMillis(),
+                    request.session(),
+                    request.sequenceNumber(),
+                    request.operation()), 0);
+
+    return applyQuery(entry).thenApply(this::logResponse);
   }
 
   /**

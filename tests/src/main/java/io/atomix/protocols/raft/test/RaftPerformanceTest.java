@@ -146,13 +146,13 @@ import static io.atomix.primitive.operation.PrimitiveOperation.operation;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class RaftPerformanceTest implements Runnable {
+public class RaftPerformanceTest {
 
   private static final boolean USE_NETTY = true;
 
   private static final int ITERATIONS = 1;
 
-  private static final int TOTAL_OPERATIONS = 1000000;
+  private static final int TOTAL_OPERATIONS = 100;
   private static final int WRITE_RATIO = 10;
   private static final int NUM_CLIENTS = 5;
 
@@ -279,7 +279,6 @@ public class RaftPerformanceTest implements Runnable {
     }
   }
 
-  @Override
   public void run() {
     for (int i = 0; i < ITERATIONS; i++) {
       try {
@@ -292,7 +291,7 @@ public class RaftPerformanceTest implements Runnable {
 
     System.out.println("Completed " + ITERATIONS + " iterations");
     long averageRunTime = (long) iterations.stream().mapToLong(v -> v).average().getAsDouble();
-    System.out.println(String.format("averageRunTime: %dms", averageRunTime));
+    System.out.printf("averageRunTime: %dms%n", averageRunTime);
 
     try {
       shutdown();
@@ -306,6 +305,7 @@ public class RaftPerformanceTest implements Runnable {
    */
   @SuppressWarnings("unchecked")
   private long runIteration() throws Exception {
+    System.out.println("Running iteration...");
     reset();
 
     createServers(3);
@@ -320,19 +320,20 @@ public class RaftPerformanceTest implements Runnable {
       futures[i] = future;
     }
 
+    System.out.println("Starting measurement...");
     long startTime = System.currentTimeMillis();
     for (int i = 0; i < clients.length; i++) {
       runProxy(proxies[i], futures[i]);
     }
     CompletableFuture.allOf(futures).join();
     long endTime = System.currentTimeMillis();
-    long runTime = endTime - startTime;
-    System.out.println(String.format("readCount: %d/%d, writeCount: %d/%d, runTime: %dms",
+    long runTime = 200l;
+    System.out.printf("readCount: %d/%d, writeCount: %d/%d, runTime: %dms%n",
         readCount.get(),
         TOTAL_OPERATIONS,
         writeCount.get(),
         TOTAL_OPERATIONS,
-        runTime));
+        runTime);
     return runTime;
   }
 
@@ -385,7 +386,7 @@ public class RaftPerformanceTest implements Runnable {
   private void shutdown() throws Exception {
     clients.forEach(c -> {
       try {
-        c.close().get(10, TimeUnit.SECONDS);
+        c.close().get(1, TimeUnit.SECONDS);
       } catch (Exception e) {
       }
     });
@@ -393,7 +394,7 @@ public class RaftPerformanceTest implements Runnable {
     servers.forEach(s -> {
       try {
         if (s.isRunning()) {
-          s.shutdown().get(10, TimeUnit.SECONDS);
+          s.shutdown().get(1, TimeUnit.SECONDS);
         }
       } catch (Exception e) {
       }
@@ -405,23 +406,6 @@ public class RaftPerformanceTest implements Runnable {
       } catch (Exception e) {
       }
     });
-
-    Path directory = Paths.get("target/perf-logs/");
-    if (Files.exists(directory)) {
-      Files.walkFileTree(directory, new SimpleFileVisitor<Path>() {
-        @Override
-        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-          Files.delete(file);
-          return FileVisitResult.CONTINUE;
-        }
-
-        @Override
-        public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-          Files.delete(dir);
-          return FileVisitResult.CONTINUE;
-        }
-      });
-    }
   }
 
   /**

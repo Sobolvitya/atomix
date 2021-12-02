@@ -182,6 +182,7 @@ public class RecoveringSessionClient implements SessionClient {
         }
         future.complete(this);
       } else {
+        log.error("Error during opening session" + error);
         recoverTask = context.schedule(Duration.ofSeconds(1), () -> openProxy(future));
       }
     });

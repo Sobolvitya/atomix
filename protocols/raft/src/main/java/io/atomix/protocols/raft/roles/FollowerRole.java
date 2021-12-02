@@ -22,15 +22,7 @@ import io.atomix.protocols.raft.cluster.RaftMember;
 import io.atomix.protocols.raft.cluster.impl.DefaultRaftMember;
 import io.atomix.protocols.raft.cluster.impl.RaftMemberContext;
 import io.atomix.protocols.raft.impl.RaftContext;
-import io.atomix.protocols.raft.protocol.AppendRequest;
-import io.atomix.protocols.raft.protocol.AppendResponse;
-import io.atomix.protocols.raft.protocol.ConfigureRequest;
-import io.atomix.protocols.raft.protocol.ConfigureResponse;
-import io.atomix.protocols.raft.protocol.InstallRequest;
-import io.atomix.protocols.raft.protocol.InstallResponse;
-import io.atomix.protocols.raft.protocol.PollRequest;
-import io.atomix.protocols.raft.protocol.VoteRequest;
-import io.atomix.protocols.raft.protocol.VoteResponse;
+import io.atomix.protocols.raft.protocol.*;
 import io.atomix.protocols.raft.storage.log.entry.RaftLogEntry;
 import io.atomix.protocols.raft.utils.Quorum;
 import io.atomix.storage.journal.Indexed;
@@ -49,6 +41,13 @@ import java.util.stream.Collectors;
 public final class FollowerRole extends ActiveRole {
   private final ClusterMembershipEventListener clusterListener = this::handleClusterEvent;
   private final Random random = new Random();
+
+  @Override
+  public CompletableFuture<QueryResponse> onQuery(QueryRequest request) {
+    log.debug("Follower Received Read  {}", request);
+    return super.onQuery(request);
+  }
+
   private Scheduled heartbeatTimer;
 
   public FollowerRole(RaftContext context) {
